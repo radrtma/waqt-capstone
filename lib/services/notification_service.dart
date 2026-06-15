@@ -27,6 +27,16 @@ class NotificationService {
     await prefs.setString('selected_adzan', soundFileName);
   }
 
+  Future<bool> isAdzanMuted() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('mute_adzan') ?? false;
+  }
+
+  Future<void> setAdzanMuted(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('mute_adzan', value);
+  }
+
   Future<void> init() async {
     if (_isInitialized) return;
     if (_initFuture != null) return _initFuture!;
@@ -50,7 +60,7 @@ class NotificationService {
     }
 
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
 
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -76,32 +86,15 @@ class NotificationService {
     debugPrint('NotificationService: Plugin initialized: $initialized');
 
     if (defaultTargetPlatform == TargetPlatform.android) {
-      final androidPlugin = _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
 
-      await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'waqt_general_v2',
-          'WAQT Notifications',
-          description: 'Main app notifications',
-          importance: Importance.max,
-          playSound: true,
-          enableVibration: true,
-        ),
+      await _ensureAndroidChannel(
+        channelId: 'waqt_general_v2',
+        channelName: 'WAQT Notifications',
       );
 
-      // Create a default channel just in case
-      await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'waqt_prayer_v3',
-          'Jadwal Sholat',
-          description: 'Notifikasi jadwal sholat harian',
-          importance: Importance.max,
-          playSound: true,
-          enableVibration: true,
-        ),
+      await _ensureAndroidChannel(
+        channelId: 'waqt_prayer_v3',
+        channelName: 'Jadwal Sholat',
       );
     }
 
@@ -140,6 +133,32 @@ class NotificationService {
     }
   }
 
+  Future<void> _ensureAndroidChannel({
+    required String channelId,
+    required String channelName,
+    String? soundFile,
+  }) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    final androidPlugin = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+
+    await androidPlugin?.createNotificationChannel(
+      AndroidNotificationChannel(
+        channelId,
+        channelName,
+        importance: Importance.max,
+        playSound: true,
+        sound: soundFile != null
+            ? RawResourceAndroidNotificationSound(soundFile)
+            : null,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        enableVibration: true,
+      ),
+    );
+  }
+
   Future<void> showNotification({
     int id = 0,
     required String title,
@@ -151,23 +170,35 @@ class NotificationService {
     NotificationDetails platformDetails;
     if (useAdzanChannel) {
       final selectedAdzan = await getSelectedAdzan();
+      final isMuted = await isAdzanMuted();
       final channelId = 'waqt_prayer_$selectedAdzan';
+
+      if (!isMuted) {
+        await _ensureAndroidChannel(
+          channelId: channelId,
+          channelName: 'Jadwal Sholat',
+          soundFile: selectedAdzan,
+        );
+      }
+
       platformDetails = NotificationDetails(
         android: AndroidNotificationDetails(
-          channelId,
+          isMuted ? 'waqt_prayer_v3' : channelId,
           'Jadwal Sholat',
           importance: Importance.max,
           priority: Priority.max,
           ticker: 'Waqt Prayer',
           playSound: true,
-          sound: RawResourceAndroidNotificationSound(selectedAdzan),
+          sound: isMuted
+              ? null
+              : RawResourceAndroidNotificationSound(selectedAdzan),
           audioAttributesUsage: AudioAttributesUsage.alarm,
           enableVibration: true,
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentSound: true,
-          sound: '$selectedAdzan.caf',
+          sound: isMuted ? null : '$selectedAdzan.caf',
         ),
       );
     } else {
@@ -232,63 +263,44 @@ class NotificationService {
         isAdzan: true,
       );
 
-      // Logika Peringatan (15 menit sebelum sholat berikutnya habis)
-      if (i < prayerNames.length - 1) {
-        final nextName = prayerNames[i + 1];
-        final nextTimeStr = timings[nextName];
-        if (nextTimeStr != null) {
-          final nextParts = nextTimeStr.split(':');
-          final nextPrayerTime = tz.TZDateTime(
-            tz.local,
-            nowTz.year,
-            nowTz.month,
-            nowTz.day,
-            int.parse(nextParts[0]),
-            int.parse(nextParts[1]),
-          );
+      // Logika Peringatan dan Qada (termasuk transisi Isya -> Subuh besok)
+      final nextIndex = (i + 1) % prayerNames.length;
+      final nextName = prayerNames[nextIndex];
+      final nextTimeStr = timings[nextName];
 
-          var warningTime = nextPrayerTime.subtract(
-            const Duration(minutes: 15),
-          );
+      if (nextTimeStr != null) {
+        final nextParts = nextTimeStr.split(':');
+        var nextPrayerTime = tz.TZDateTime(
+          tz.local,
+          nowTz.year,
+          nowTz.month,
+          nowTz.day,
+          int.parse(nextParts[0]),
+          int.parse(nextParts[1]),
+        );
 
-          if (warningTime.isBefore(nowTz)) {
-            warningTime = warningTime.add(const Duration(days: 1));
-          }
+        // Pastikan waktu sholat berikutnya adalah setelah sholat saat ini
+        if (nextIndex == 0 || nextPrayerTime.isBefore(prayerTime)) {
+          nextPrayerTime = nextPrayerTime.add(const Duration(days: 1));
+        }
 
+        // 1. Peringatan (15 menit sebelum sholat berikutnya)
+        var warningTime = nextPrayerTime.subtract(const Duration(minutes: 15));
+        if (warningTime.isAfter(nowTz)) {
           debugPrint(
             'NotificationService: [SCHEDULED_WARNING] for $name at $warningTime',
           );
           await _scheduleNotification(
             id: i + 100,
-            title: 'Waktu ${prayerNames[i]} Segera Berakhir',
+            title: 'Waktu $name Segera Berakhir',
             body: 'Tinggal 15 menit lagi sebelum waktu $nextName tiba.',
             scheduledDate: warningTime,
           );
         }
-      }
 
-      // LOGIKA BARU: Jadwalkan NOTIFIKASI TERLEWAT (Qada) untuk sholat sebelumnya
-      // Notifikasi terlewat untuk sholat [i] akan muncul pada jam sholat [i+1]
-      if (i < prayerNames.length - 1) {
-        final nextName = prayerNames[i + 1];
-        final nextTimeStr = timings[nextName];
-        if (nextTimeStr != null) {
-          final nextParts = nextTimeStr.split(':');
-          final nextPrayerTime = tz.TZDateTime(
-            tz.local,
-            nowTz.year,
-            nowTz.month,
-            nowTz.day,
-            int.parse(nextParts[0]),
-            int.parse(nextParts[1]),
-          );
-
-          // Jeda 20 detik agar notifikasi jadwal sholat (yang tepat waktu) muncul duluan
-          var missedAlertTime = nextPrayerTime.add(const Duration(seconds: 20));
-          if (missedAlertTime.isBefore(nowTz)) {
-            missedAlertTime = missedAlertTime.add(const Duration(days: 1));
-          }
-
+        // 2. Notifikasi Terlewat (Qada) - 20 detik setelah sholat berikutnya tiba
+        var missedAlertTime = nextPrayerTime.add(const Duration(seconds: 20));
+        if (missedAlertTime.isAfter(nowTz)) {
           debugPrint(
             'NotificationService: [SCHEDULED_QADA_ALERT] for $name at $missedAlertTime',
           );
@@ -315,44 +327,35 @@ class NotificationService {
     NotificationDetails platformDetails;
     if (isAdzan) {
       final selectedAdzan = await getSelectedAdzan();
+      final isMuted = await isAdzanMuted();
       final channelId = 'waqt_prayer_$selectedAdzan';
 
-      // Ensure channel exists
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        final androidPlugin = _notificationsPlugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-        await androidPlugin?.createNotificationChannel(
-          AndroidNotificationChannel(
-            channelId,
-            'Jadwal Sholat',
-            description: 'Notifikasi jadwal sholat harian dengan Adzan',
-            importance: Importance.max,
-            playSound: true,
-            sound: RawResourceAndroidNotificationSound(selectedAdzan),
-            audioAttributesUsage: AudioAttributesUsage.alarm,
-            enableVibration: true,
-          ),
+      if (!isMuted) {
+        await _ensureAndroidChannel(
+          channelId: channelId,
+          channelName: 'Jadwal Sholat',
+          soundFile: selectedAdzan,
         );
       }
 
       platformDetails = NotificationDetails(
         android: AndroidNotificationDetails(
-          channelId,
+          isMuted ? 'waqt_prayer_v3' : channelId,
           'Jadwal Sholat',
           importance: Importance.max,
           priority: Priority.high,
           ticker: 'Waqt Prayer',
           playSound: true,
-          sound: RawResourceAndroidNotificationSound(selectedAdzan),
+          sound: isMuted
+              ? null
+              : RawResourceAndroidNotificationSound(selectedAdzan),
           audioAttributesUsage: AudioAttributesUsage.alarm,
           enableVibration: true,
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentSound: true,
-          sound: '$selectedAdzan.caf',
+          sound: isMuted ? null : '$selectedAdzan.caf',
         ),
       );
     } else {

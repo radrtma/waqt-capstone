@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import '../services/prayer_service.dart';
+import '../services/notification_service.dart';
 
 class PrayScreen extends StatefulWidget {
   const PrayScreen({super.key});
@@ -16,15 +17,41 @@ class _PrayScreenState extends State<PrayScreen> {
   bool _isLoading = true;
   String? _error;
   Timer? _timer;
+  bool _isMuted = false;
 
   @override
   void initState() {
     super.initState();
+    _loadMuteStatus();
     _fetchPrayerTimes();
     // Refresh UI every minute to update "Next Prayer" highlight
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _loadMuteStatus() async {
+    final status = await NotificationService().isAdzanMuted();
+    if (mounted) {
+      setState(() {
+        _isMuted = status;
+      });
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final newStatus = !_isMuted;
+    await NotificationService().setAdzanMuted(newStatus);
+    if (mounted) {
+      setState(() {
+        _isMuted = newStatus;
+      });
+    }
+
+    // Reschedule notifications to apply mute/unmute
+    if (_timings != null) {
+      await NotificationService().schedulePrayerNotifications(_timings!);
+    }
   }
 
   @override
@@ -125,7 +152,7 @@ class _PrayScreenState extends State<PrayScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Prayer Times',
+                  'Jadwal Sholat',
                   style: GoogleFonts.dmSerifDisplay(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -141,17 +168,33 @@ class _PrayScreenState extends State<PrayScreen> {
                 ),
               ],
             ),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1F6F5B).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.mosque_rounded,
-                color: Color(0xFF1F6F5B),
-                size: 28,
-              ),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _toggleMute,
+                  icon: Icon(
+                    _isMuted
+                        ? Icons.notifications_off_rounded
+                        : Icons.notifications_active_rounded,
+                    color: const Color(0xFF1F6F5B),
+                    size: 28,
+                  ),
+                  tooltip: _isMuted ? 'Aktifkan Suara Adzan' : 'Bisukan Adzan',
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F6F5B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.mosque_rounded,
+                    color: Color(0xFF1F6F5B),
+                    size: 28,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -182,7 +225,7 @@ class _PrayScreenState extends State<PrayScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Try Again'),
+            child: const Text('Coba Lagi'),
           ),
         ],
       ),
@@ -265,7 +308,7 @@ class _PrayScreenState extends State<PrayScreen> {
                 ),
                 if (isActive)
                   Text(
-                    'Active Now',
+                    'Aktif Sekarang',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: const Color(0xFFF2C94C).withValues(alpha: 0.8),

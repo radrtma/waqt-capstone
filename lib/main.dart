@@ -4,12 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'widgets/bottom_navbar.dart';
 import 'screens/home_content.dart';
+import 'screens/community_screen.dart';
 import 'screens/pray_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/login_screen.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
 import 'services/prayer_service.dart';
+import 'services/auth_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,13 +35,68 @@ class WaqtApp extends StatelessWidget {
           background: const Color(0xFFF5E9DA),
         ),
       ),
-      home: const HomeScreen(),
+      home: const AuthWrapper(),
     );
   }
 }
 
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool? _isLoggedIn;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  void _checkLoginStatus() async {
+    final token = await AuthService().getSavedToken();
+    setState(() {
+      _isLoggedIn = token != null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoggedIn == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5E9DA),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF1F6F5B)),
+        ),
+      );
+    }
+
+    if (_isLoggedIn!) {
+      return HomeScreen(
+        onLogout: () {
+          setState(() {
+            _isLoggedIn = false;
+          });
+        },
+      );
+    } else {
+      return LoginScreen(
+        onLoginSuccess: () {
+          setState(() {
+            _isLoggedIn = true;
+          });
+        },
+      );
+    }
+  }
+}
+
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback onLogout;
+  const HomeScreen({super.key, required this.onLogout});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -263,6 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _userName = newName;
     });
     await _db.updateUsername(newName);
+    await AuthService().updateProfile(newName);
   }
 
   Future<bool> _checkIfTrulyAllDone() async {
@@ -342,6 +401,19 @@ class _HomeScreenState extends State<HomeScreen> {
         missedPrayers: _qadaList, // Meneruskan daftar Qada dari Database
         onQadaComplete: _onQadaComplete,
         onPrayerMissed: _onPrayerMissed,
+        onTabChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+      ),
+      CommunityScreen(
+        currentUsername: _userName,
+        onTabChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
       ),
       const PrayScreen(),
       HistoryScreen(
@@ -351,6 +423,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ProfileScreen(
         userName: _userName, 
         onNameChanged: _updateUserName,
+        onLogout: widget.onLogout,
+        onTabChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
       ),
     ];
 

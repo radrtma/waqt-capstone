@@ -17,18 +17,24 @@ class DatabaseService {
 
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'waqt_database.db');
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    // 1. User Profile
+    // 1. User Profile with token column (Version 2)
     await db.execute('''
       CREATE TABLE user_profile (
         id INTEGER PRIMARY KEY,
-        username TEXT
+        username TEXT,
+        token TEXT
       )
     ''');
-    await db.insert('user_profile', {'id': 1, 'username': 'User'});
+    await db.insert('user_profile', {'id': 1, 'username': 'User', 'token': null});
 
     // 2. Qada Entries
     await db.execute('''
@@ -72,6 +78,17 @@ class DatabaseService {
       'is_frozen': 0,
       'last_updated_date': '',
     });
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute("ALTER TABLE user_profile ADD COLUMN token TEXT");
+        debugPrint("SQLite: Column 'token' added successfully to user_profile table.");
+      } catch (e) {
+        debugPrint("SQLite Warning: failed to add column 'token': $e");
+      }
+    }
   }
 
   // --- USER PROFILE ---

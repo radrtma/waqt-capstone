@@ -15,6 +15,7 @@ class HomeContent extends StatefulWidget {
   final List<Map<String, dynamic>> missedPrayers;
   final Function(int, String) onQadaComplete;
   final Function(String) onPrayerMissed;
+  final Function(int) onTabChanged;
 
   const HomeContent({
     super.key,
@@ -27,6 +28,7 @@ class HomeContent extends StatefulWidget {
     required this.missedPrayers,
     required this.onQadaComplete,
     required this.onPrayerMissed,
+    required this.onTabChanged,
   });
 
   @override
@@ -208,6 +210,7 @@ class _HomeContentState extends State<HomeContent> {
                 streakCount: widget.streakCount,
                 isFrozen: widget.isFrozen,
                 onQadaComplete: widget.onQadaComplete,
+                onTabChanged: widget.onTabChanged,
               ),
             ],
           ),

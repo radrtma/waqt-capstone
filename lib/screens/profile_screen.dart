@@ -6,15 +6,20 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/notification_service.dart';
 import '../services/prayer_service.dart';
+import 'community_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
   final Function(String) onNameChanged;
+  final VoidCallback onLogout;
+  final Function(int) onTabChanged;
 
   const ProfileScreen({
     super.key,
     required this.userName,
     required this.onNameChanged,
+    required this.onLogout,
+    required this.onTabChanged,
   });
 
   @override
@@ -27,6 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _selectedCountry = 'Indonesia';
   String _memberSince = '...';
   String? _profileImagePath;
+  bool _isMuted = false;
 
   final Map<String, String> _cityOptions = {
     'Jakarta': 'Indonesia',
@@ -66,8 +72,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       storedDate = DateFormat('MMMM yyyy').format(DateTime.now());
       await prefs.setString('member_since', storedDate);
     }
-
     setState(() {
+      _isMuted = prefs.getBool('mute_adzan') ?? false;
       _selectedAdzan = prefs.getString('selected_adzan') ?? 'bilal';
       _selectedCity = prefs.getString('selected_city') ?? 'Jakarta';
       _selectedCountry = prefs.getString('selected_country') ?? 'Indonesia';
@@ -182,6 +188,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _toggleMute(bool value) async {
+    await NotificationService().setAdzanMuted(value);
+    setState(() {
+      _isMuted = value;
+    });
+
+    // Reschedule notifications to apply mute/unmute
+    final prayerService = PrayerService();
+    try {
+      final result = await prayerService.getPrayerTimings();
+      final timings = result['timings'] as Map<String, dynamic>;
+      await NotificationService().schedulePrayerNotifications(timings);
+    } catch (e) {
+      debugPrint('Failed to reschedule notifications after mute: $e');
+    }
+  }
+
   Future<void> _testAdzanNotification() async {
     final adzanName = _adzanOptions[_selectedAdzan] ?? 'Adzan';
     ScaffoldMessenger.of(context).showSnackBar(
@@ -277,6 +300,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _selectedCountry = country;
                       });
                     }
+                    // Clear cache because location changed
+                    await PrayerService().clearCache();
                     if (context.mounted) Navigator.pop(context);
                   },
                 );
@@ -440,7 +465,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           Text(
-            'Member since $_memberSince',
+            'Anggota sejak $_memberSince',
             style: GoogleFonts.inter(
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.8),
@@ -454,80 +479,127 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildSettingsList() {
     return Column(
       children: [
-        GestureDetector(
+        _buildSettingsItem(
+          Icons.notifications_active_rounded,
+          'Notifikasi',
+          'Adzan: ${_adzanOptions[_selectedAdzan]}',
           onTap: () => _showAdzanSelectionDialog(context),
-          child: _buildSettingsItem(Icons.notifications_active_rounded, 'Notifications', 'Adzan: ${_adzanOptions[_selectedAdzan]}'),
         ),
-        GestureDetector(
+        _buildSettingsItem(
+          _isMuted ? Icons.notifications_off_rounded : Icons.notifications_active_rounded,
+          'Bisukan Adzan',
+          _isMuted ? 'Suara adzan dimatikan' : 'Suara adzan aktif',
+          trailing: Switch(
+            value: _isMuted,
+            onChanged: _toggleMute,
+            activeColor: const Color(0xFFF2C94C),
+            activeTrackColor: const Color(0xFF1F6F5B).withOpacity(0.5),
+          ),
+        ),
+        _buildSettingsItem(
+          Icons.volume_up_rounded,
+          'Test Suara Adzan',
+          'Coba mainkan notifikasi Adzan sekarang',
           onTap: _testAdzanNotification,
-          child: _buildSettingsItem(Icons.volume_up_rounded, 'Test Suara Adzan', 'Coba mainkan notifikasi Adzan sekarang'),
         ),
-        GestureDetector(
+        _buildSettingsItem(
+          Icons.location_on_rounded,
+          'Lokasi',
+          '$_selectedCity, $_selectedCountry',
           onTap: () => _showLocationDialog(context),
-          child: _buildSettingsItem(Icons.location_on_rounded, 'Location', '$_selectedCity, $_selectedCountry'),
         ),
-        GestureDetector(
+        _buildSettingsItem(
+          Icons.forum_rounded,
+          'Kelola Kiriman Saya',
+          'Lihat, edit, atau hapus kiriman komunitas Anda',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CommunityScreen(
+                  currentUsername: widget.userName,
+                  showOnlyOwnPosts: true,
+                ),
+              ),
+            );
+          },
+        ),
+        _buildSettingsItem(
+          Icons.info_rounded,
+          'Tentang WAQT',
+          'Versi 1.0.0+1',
           onTap: () => _showAboutDialog(context),
-          child: _buildSettingsItem(Icons.info_rounded, 'About WAQT', 'Version 1.0.0+1'),
+        ),
+        _buildSettingsItem(
+          Icons.logout_rounded,
+          'Keluar Akun',
+          'Keluar dari sesi saat ini',
+          onTap: widget.onLogout,
         ),
       ],
     );
   }
 
-  Widget _buildSettingsItem(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
+  Widget _buildSettingsItem(IconData icon, String title, String subtitle,
+      {VoidCallback? onTap, Widget? trailing}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F6F5B), // Deep Green Box
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFF2C94C).withValues(alpha: 0.2)),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            child: Icon(icon, color: const Color(0xFFF2C94C), size: 24, shadows: [Shadow(color: const Color(0xFFF2C94C).withValues(alpha: 0.4), blurRadius: 8)]), // Glowing Gold Icon
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: const Color(0xFF1F6F5B),
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF6B6B6B),
-                  ),
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F6F5B), // Deep Green Box
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFFF2C94C).withValues(alpha: 0.2)),
+              ),
+              child: Icon(icon, color: const Color(0xFFF2C94C), size: 24, shadows: [
+                Shadow(
+                    color: const Color(0xFFF2C94C).withValues(alpha: 0.4),
+                    blurRadius: 8)
+              ]), // Glowing Gold Icon
             ),
-          ),
-          Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
-        ],
-      ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: const Color(0xFF1F6F5B),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF6B6B6B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            trailing ?? Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }
