@@ -13,17 +13,25 @@
 
     let streakCount = parseInt(localStorage.getItem('streak_count') || '0');
     let isFrozen = localStorage.getItem('streak_is_frozen') === 'true';
-    let prayerStates = {
-        Fajr: false,
-        Dzuhur: false,
-        Ashar: false,
-        Maghrib: false,
-        Isha: false
-    };
-    
     let historyList = JSON.parse(localStorage.getItem('history_list') || '[]');
     let qadaList = JSON.parse(localStorage.getItem('qada_list') || '[]');
     let lastUpdateDate = localStorage.getItem('last_update_date') || new Date().toISOString().split('T')[0];
+
+    let prayerStates = {
+        Fajr: false, Dzuhur: false, Ashar: false, Maghrib: false, Isha: false
+    };
+
+    const _todayStr = new Date().toISOString().split('T')[0];
+    const _todayRecord = historyList.find(h => h.date === _todayStr);
+    if (_todayRecord) {
+        prayerStates = {
+            Fajr: _todayRecord.Fajr,
+            Dzuhur: _todayRecord.Dzuhur,
+            Ashar: _todayRecord.Ashar,
+            Maghrib: _todayRecord.Maghrib,
+            Isha: _todayRecord.Isha
+        };
+    }
 
     const timings = {
         Fajr: '04:42',
@@ -370,7 +378,15 @@
                                 Maghrib: todayRecord.Maghrib,
                                 Isha: todayRecord.Isha
                             };
+                        } else {
+                             // Force reset if no record today
+                             prayerStates = { Fajr: false, Dzuhur: false, Ashar: false, Maghrib: false, Isha: false };
                         }
+                    } else {
+                        // Force reset if server has absolutely no history
+                        historyList = [];
+                        localStorage.removeItem('history_list');
+                        prayerStates = { Fajr: false, Dzuhur: false, Ashar: false, Maghrib: false, Isha: false };
                     }
 
                     updateWidgetsUI();
@@ -539,10 +555,14 @@
                     const label = this.getAttribute('data-prayer');
                     const reached = isPrayerTimeReached(label);
                     const isCompleted = prayerStates[label];
+                    const missed = isPrayerMissed(label);
+                    
                     if (!reached) {
                         alert(`Belum masuk waktu ${label}.`);
                     } else if (isCompleted) {
                         alert('Sholat sudah selesai, tidak bisa dibatalkan.');
+                    } else if (missed) {
+                        alert(`Waktu sholat ${label} sudah terlewat (silang merah). Silakan lunasi hutang sholat ini melalui menu Qada di bawah.`);
                     } else {
                         handleTogglePrayer(label);
                     }

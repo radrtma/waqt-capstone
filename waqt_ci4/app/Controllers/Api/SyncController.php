@@ -14,7 +14,21 @@ class SyncController extends BaseController
 
     public function sync()
     {
-        $userId = $this->request->getHeaderLine('X-User-ID');
+        $authHeader = $this->request->getHeaderLine('Authorization');
+        $sessionToken = '';
+        if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            $sessionToken = $matches[1];
+        }
+
+        $userId = null;
+        if ($sessionToken) {
+            $userModel = new \App\Models\UserModel();
+            $user = $userModel->where('session_token', $sessionToken)->first();
+            if ($user) {
+                $userId = $user['id'];
+            }
+        }
+
         if (!$userId) {
             return $this->respond([
                 'status'  => 'error',
@@ -49,21 +63,36 @@ class SyncController extends BaseController
             }
         }
 
-        // 2. Merge History
+        // 2. Merge History (Logical OR)
         if ($history && is_array($history)) {
             $historyModel = new HistoryModel();
             foreach ($history as $h) {
                 if (!isset($h['date'])) continue;
 
                 $existing = $historyModel->where('user_id', $userId)->where('date', $h['date'])->first();
+                
+                $fajrDone = (isset($h['fajr_done']) && $h['fajr_done']) ? 1 : 0;
+                $dzuhurDone = (isset($h['dzuhur_done']) && $h['dzuhur_done']) ? 1 : 0;
+                $asharDone = (isset($h['ashar_done']) && $h['ashar_done']) ? 1 : 0;
+                $maghribDone = (isset($h['maghrib_done']) && $h['maghrib_done']) ? 1 : 0;
+                $ishaDone = (isset($h['isha_done']) && $h['isha_done']) ? 1 : 0;
+
+                if ($existing) {
+                    $fajrDone = ($fajrDone || $existing['fajr_done']) ? 1 : 0;
+                    $dzuhurDone = ($dzuhurDone || $existing['dzuhur_done']) ? 1 : 0;
+                    $asharDone = ($asharDone || $existing['ashar_done']) ? 1 : 0;
+                    $maghribDone = ($maghribDone || $existing['maghrib_done']) ? 1 : 0;
+                    $ishaDone = ($ishaDone || $existing['isha_done']) ? 1 : 0;
+                }
+
                 $historyData = [
                     'user_id'      => $userId,
                     'date'         => $h['date'],
-                    'fajr_done'    => (isset($h['fajr_done']) && $h['fajr_done']) ? 1 : 0,
-                    'dzuhur_done'  => (isset($h['dzuhur_done']) && $h['dzuhur_done']) ? 1 : 0,
-                    'ashar_done'   => (isset($h['ashar_done']) && $h['ashar_done']) ? 1 : 0,
-                    'maghrib_done' => (isset($h['maghrib_done']) && $h['maghrib_done']) ? 1 : 0,
-                    'isha_done'    => (isset($h['isha_done']) && $h['isha_done']) ? 1 : 0
+                    'fajr_done'    => $fajrDone,
+                    'dzuhur_done'  => $dzuhurDone,
+                    'ashar_done'   => $asharDone,
+                    'maghrib_done' => $maghribDone,
+                    'isha_done'    => $ishaDone
                 ];
 
                 if ($existing) {
@@ -74,19 +103,25 @@ class SyncController extends BaseController
             }
         }
 
-        // 3. Merge Qada
+        // 3. Merge Qada (Logical OR)
         if ($qada && is_array($qada)) {
             $qadaModel = new QadaModel();
             foreach ($qada as $q) {
                 if (!isset($q['uuid'])) continue;
 
                 $existing = $qadaModel->find($q['uuid']);
+                $isCompleted = (isset($q['is_completed']) && $q['is_completed']) ? 1 : 0;
+
+                if ($existing) {
+                    $isCompleted = ($isCompleted || $existing['is_completed']) ? 1 : 0;
+                }
+
                 $qadaData = [
                     'uuid'         => $q['uuid'],
                     'user_id'      => $userId,
                     'prayer_name'  => isset($q['prayer_name']) ? $q['prayer_name'] : '',
                     'date_missed'  => isset($q['date_missed']) ? $q['date_missed'] : '',
-                    'is_completed' => (isset($q['is_completed']) && $q['is_completed']) ? 1 : 0
+                    'is_completed' => $isCompleted
                 ];
 
                 if ($existing) {

@@ -77,8 +77,11 @@ class Auth extends BaseController
                     return redirect()->back()->withInput();
                 }
 
-                $sessionToken = bin2hex(random_bytes(16));
-                $userModel->update($user['id'], ['session_token' => $sessionToken]);
+                $sessionToken = $user['session_token'];
+                if (empty($sessionToken)) {
+                    $sessionToken = bin2hex(random_bytes(16));
+                    $userModel->update($user['id'], ['session_token' => $sessionToken]);
+                }
 
                 $this->session->set([
                     'logged_in'     => true,

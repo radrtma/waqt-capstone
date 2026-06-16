@@ -10,11 +10,7 @@
             <span class="greeting-name"><?= esc($username) ?></span>
         </div>
         
-        <div class="web-streak-badge" id="btnShowStreak">
-            <img src="<?= base_url('assets/icon_streak.png') ?>" class="web-streak-icon" id="streakBadgeIcon" alt="Streak badge">
-            <span class="web-streak-count" id="streakBadgeCount">0x</span>
-            <span class="web-streak-label">Days</span>
-        </div>
+        <!-- Streak badge hidden for web app -->
     </div>
 
     <!-- Countdown Card -->
@@ -41,10 +37,7 @@
         <div class="web-date-hijri">8 Dzulhijjah 1447 H</div>
     </div>
 
-    <!-- Tracker Pill -->
-    <div class="web-tracker-pill" id="prayerTrackerPill">
-        <!-- Will be populated dynamically by JS -->
-    </div>
+    <!-- Tracker Pill hidden for web app -->
 
     <!-- Dari Komunitas Section -->
     <div class="dashboard-community-section" style="margin-top: 2rem;">

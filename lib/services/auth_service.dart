@@ -159,6 +159,10 @@ class AuthService {
   // Clear local token (Logout)
   Future<void> logout() async {
     try {
+      // Kritis: Sinkronisasikan data lokal (yg belum terkirim) ke server SEBELUM dihapus!
+      debugPrint("AuthService: Attempting final sync before logout...");
+      await _db.syncWithServer();
+
       final db = await _db.database;
       await db.update(
         'user_profile',
@@ -166,6 +170,10 @@ class AuthService {
         where: 'id = ?',
         whereArgs: [1],
       );
+      
+      // Wipe local data to prevent next user from inheriting it
+      await _db.clearAllUserData();
+      
       debugPrint("SQLite Safeguard: Token cleared locally.");
     } catch (e) {
       debugPrint("AuthService Error clearing token: $e");

@@ -151,10 +151,7 @@
                 <span style="font-weight: 600; color: #475569;">Anggota Aktif</span>
                 <span id="activeMembersCount" data-base="<?= $activeMembers ?>" style="font-weight: 700; color: hsl(var(--primary)); transition: all 0.2s; display: inline-block; min-width: 50px; text-align: right;"><?= number_format($activeMembers, 0, ',', '.') ?></span>
             </div>
-            <div class="widget-item" style="justify-content: space-between; font-size: 0.85rem;">
-                <span style="font-weight: 600; color: #475569;">Shalat Terlacak</span>
-                <span id="trackedPrayersCount" data-base="<?= $trackedPrayersCount ?>" style="font-weight: 700; color: hsl(var(--primary)); transition: all 0.2s; display: inline-block; min-width: 60px; text-align: right;"><?= number_format($trackedPrayersCount, 0, ',', '.') ?></span>
-            </div>
+            <!-- Shalat Terlacak removed for web app -->
             <div class="widget-item" style="justify-content: space-between; font-size: 0.85rem;">
                 <span style="font-weight: 600; color: #475569;">Review Masjid</span>
                 <span id="masjidReviewsCount" data-base="<?= $mosqueReviewsCount ?>" style="font-weight: 700; color: hsl(var(--primary)); transition: all 0.2s; display: inline-block; min-width: 50px; text-align: right;"><?= number_format($mosqueReviewsCount, 0, ',', '.') ?></span>

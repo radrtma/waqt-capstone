@@ -27,6 +27,16 @@ public class SyncController {
     @Autowired
     private UserQadaRepository qadaRepository;
 
+    private boolean getBooleanSafely(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        } else if (value instanceof Number) {
+            return ((Number) value).intValue() != 0;
+        }
+        return false;
+    }
+
     @PostMapping("/sync")
     @Transactional
     public ResponseEntity<Map<String, Object>> sync(
@@ -47,7 +57,7 @@ public class SyncController {
             Map<String, Object> streakMap = (Map<String, Object>) requestBody.get("streak");
             if (streakMap != null) {
                 int count = ((Number) streakMap.getOrDefault("count", 0)).intValue();
-                boolean isFrozen = (boolean) streakMap.getOrDefault("is_frozen", false);
+                boolean isFrozen = getBooleanSafely(streakMap, "is_frozen");
                 String lastUpdatedDate = (String) streakMap.getOrDefault("last_updated_date", "");
 
                 UserStreak streak = UserStreak.builder()
@@ -61,7 +71,7 @@ public class SyncController {
             }
         }
 
-        // 2. Merge History
+        // 2. Merge History (Logical OR)
         if (requestBody.containsKey("history")) {
             List<Map<String, Object>> historyList = (List<Map<String, Object>>) requestBody.get("history");
             if (historyList != null) {
@@ -69,11 +79,21 @@ public class SyncController {
                     String date = (String) h.get("date");
                     if (date == null) continue;
 
-                    boolean fajrDone = (boolean) h.getOrDefault("fajr_done", false);
-                    boolean dzuhurDone = (boolean) h.getOrDefault("dzuhur_done", false);
-                    boolean asharDone = (boolean) h.getOrDefault("ashar_done", false);
-                    boolean maghribDone = (boolean) h.getOrDefault("maghrib_done", false);
-                    boolean ishaDone = (boolean) h.getOrDefault("isha_done", false);
+                    boolean fajrDone = getBooleanSafely(h, "fajr_done");
+                    boolean dzuhurDone = getBooleanSafely(h, "dzuhur_done");
+                    boolean asharDone = getBooleanSafely(h, "ashar_done");
+                    boolean maghribDone = getBooleanSafely(h, "maghrib_done");
+                    boolean ishaDone = getBooleanSafely(h, "isha_done");
+
+                    Optional<UserHistory> existingOpt = historyRepository.findById(new UserHistoryId(userId, date));
+                    if (existingOpt.isPresent()) {
+                        UserHistory existing = existingOpt.get();
+                        fajrDone = fajrDone || existing.isFajrDone();
+                        dzuhurDone = dzuhurDone || existing.isDzuhurDone();
+                        asharDone = asharDone || existing.isAsharDone();
+                        maghribDone = maghribDone || existing.isMaghribDone();
+                        ishaDone = ishaDone || existing.isIshaDone();
+                    }
 
                     UserHistory history = UserHistory.builder()
                             .userId(userId)
@@ -90,7 +110,7 @@ public class SyncController {
             }
         }
 
-        // 3. Merge Qada
+        // 3. Merge Qada (Logical OR)
         if (requestBody.containsKey("qada")) {
             List<Map<String, Object>> qadaList = (List<Map<String, Object>>) requestBody.get("qada");
             if (qadaList != null) {
@@ -100,7 +120,12 @@ public class SyncController {
 
                     String prayerName = (String) q.getOrDefault("prayer_name", "");
                     String dateMissed = (String) q.getOrDefault("date_missed", "");
-                    boolean isCompleted = (boolean) q.getOrDefault("is_completed", false);
+                    boolean isCompleted = getBooleanSafely(q, "is_completed");
+
+                    Optional<UserQada> existingOpt = qadaRepository.findById(uuid);
+                    if (existingOpt.isPresent()) {
+                        isCompleted = isCompleted || existingOpt.get().isCompleted();
+                    }
 
                     UserQada qada = UserQada.builder()
                             .uuid(uuid)

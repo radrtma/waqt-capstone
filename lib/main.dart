@@ -76,7 +76,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
     if (_isLoggedIn!) {
       return HomeScreen(
-        onLogout: () {
+        onLogout: () async {
+          await AuthService().logout();
           setState(() {
             _isLoggedIn = false;
           });
@@ -205,6 +206,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Cleanup old history (older than 7 days)
     await _db.deleteOldHistory(7);
+
+    // BACKGROUND SYNC (Silent)
+    // Akan menarik data terbaru dari server dan mengamankan data lokal
+    _db.syncWithServer().then((_) {
+      // Jika ingin UI otomatis refresh setelah sync, bisa tambahkan setState ini:
+      // _refreshDataAfterSync();
+    });
   }
 
   Future<void> _syncMonthlyTimings() async {
@@ -251,6 +259,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     await _db.upsertHistory(date: _lastUpdateDate, status: _prayerStates);
     await _db.updateStreak(_streakCount, _isFrozen, _lastUpdateDate);
+    
+    // Background sync immediately so the Web Dashboard sees the change!
+    _db.syncWithServer().catchError((e) {
+      debugPrint("Real-time sync failed, will retry on next app load: $e");
+    });
   }
 
   /// Called from HomeContent when a prayer is detected as missed in real-time
@@ -281,6 +294,8 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _qadaList = newList;
         });
+        // Sync immediately so web sees Qada
+        _db.syncWithServer().catchError((e) => debugPrint("Qada sync failed: $e"));
       } catch (e) {
         debugPrint('Main: Failed to refresh Qada list: $e');
       }
@@ -291,7 +306,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onQadaComplete(int id, String label) async {
     // 1. Hapus dari database secara permanen
     await _db.completeQadaEntry(id);
+
+    // 2. Ambil list terbaru
     final newList = await _db.getQadaEntries();
+    
+    // Sync immediately so web sees Qada removed
+    _db.syncWithServer().catchError((e) => debugPrint("Qada complete sync failed: $e"));
 
     setState(() {
       _qadaList = newList;

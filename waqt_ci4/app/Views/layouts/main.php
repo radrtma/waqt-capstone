@@ -27,12 +27,7 @@
                 <a href="<?= base_url('dashboard') ?>" class="top-nav-item <?= ($activeTab === 'dashboard') ? 'active' : '' ?>">
                     Dashboard
                 </a>
-                <a href="<?= base_url('prayer') ?>" class="top-nav-item <?= ($activeTab === 'schedule') ? 'active' : '' ?>">
-                    Jadwal
-                </a>
-                <a href="<?= base_url('history') ?>" class="top-nav-item <?= ($activeTab === 'history') ? 'active' : '' ?>">
-                    Riwayat
-                </a>
+                <!-- Jadwal and Riwayat tabs hidden for web app -->
                 <a href="<?= base_url('community') ?>" class="top-nav-item <?= ($activeTab === 'community') ? 'active' : '' ?>">
                     Komunitas
                 </a>
@@ -48,7 +43,7 @@
                     </div>
                     <span class="topbar-username"><?= esc($username) ?></span>
                 </div>
-                <a href="<?= base_url('logout') ?>" class="btn-topbar-logout">Keluar</a>
+                <a href="<?= base_url('logout') ?>" class="btn-topbar-logout" onclick="localStorage.clear();">Keluar</a>
             </div>
         </header>
 

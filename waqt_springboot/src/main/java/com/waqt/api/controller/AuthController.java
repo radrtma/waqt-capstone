@@ -88,9 +88,12 @@ public class AuthController {
         }
 
         User user = userOpt.get();
-        String sessionToken = UUID.randomUUID().toString().replace("-", "");
-        user.setSessionToken(sessionToken);
-        userRepository.save(user);
+        String sessionToken = user.getSessionToken();
+        if (sessionToken == null || sessionToken.trim().isEmpty()) {
+            sessionToken = UUID.randomUUID().toString().replace("-", "");
+            user.setSessionToken(sessionToken);
+            userRepository.save(user);
+        }
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "success");

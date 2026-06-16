@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -269,5 +273,108 @@ class DatabaseService {
     debugPrint(
       'DatabaseService: Deleted $count uncompleted qada entries due to streak reset.',
     );
+  }
+
+  // --- CLEAR USER DATA ON LOGOUT ---
+  Future<void> clearAllUserData() async {
+    final db = await database;
+    await db.delete('prayer_history');
+    await db.delete('qada_entries');
+    await db.update('streak_data', {
+      'count': 0,
+      'is_frozen': 0,
+      'last_updated_date': '',
+    }, where: 'id = ?', whereArgs: [1]);
+    debugPrint('DatabaseService: Local user data completely cleared on logout.');
+  }
+
+  // --- BACKGROUND SYNC WITH SERVER ---
+  Future<void> syncWithServer() async {
+    try {
+      final db = await database;
+      
+      // 1. Get Token
+      final tokenResult = await db.query('user_profile', where: 'id = 1');
+      if (tokenResult.isEmpty || tokenResult.first['token'] == null) {
+        debugPrint("Sync: Cancelled, no token found.");
+        return;
+      }
+      final String token = tokenResult.first['token'] as String;
+
+      // 2. Gather Local Data
+      final streak = await getStreak();
+      final qadaList = await getQadaEntries();
+      
+      final historyMaps = await db.query('prayer_history');
+      final List<Map<String, dynamic>> historyList = [];
+      for (var m in historyMaps) {
+        historyList.add({
+          'date': m['date'],
+          'fajr_done': m['fajr_done'] == 1,
+          'dzuhur_done': m['dzuhur_done'] == 1,
+          'ashar_done': m['ashar_done'] == 1,
+          'maghrib_done': m['maghrib_done'] == 1,
+          'isha_done': m['isha_done'] == 1,
+        });
+      }
+
+      // 3. Send to Spring Boot
+      final payload = {
+        'streak': streak,
+        'history': historyList,
+        'qada': qadaList,
+      };
+
+      final response = await http.post(
+        Uri.parse('${ApiConfig.apiBaseUrl}/sync'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      );
+
+      // 4. Overwrite Local DB with Consolidated Server Response
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          // Update Streak
+          final s = data['streak'];
+          await updateStreak(s['count'], s['is_frozen'], s['last_updated_date'] ?? '');
+
+          // Update History
+          final hList = data['history'] as List<dynamic>;
+          for (var h in hList) {
+            await upsertHistory(
+              date: h['date'],
+              status: {
+                'Fajr': h['fajr_done'],
+                'Dzuhur': h['dzuhur_done'],
+                'Ashar': h['ashar_done'],
+                'Maghrib': h['maghrib_done'],
+                'Isha': h['isha_done'],
+              }
+            );
+          }
+
+          // Update Qada
+          final qList = data['qada'] as List<dynamic>;
+          await db.delete('qada_entries'); // Clear local qada
+          for (var q in qList) {
+            await db.insert('qada_entries', {
+              'prayer_name': q['prayer_name'],
+              'date_missed': q['date_missed'],
+              'is_completed': q['is_completed'] ? 1 : 0,
+            });
+          }
+          
+          debugPrint("Sync: Background sync completed successfully.");
+        }
+      } else {
+        debugPrint("Sync Error: Failed to sync with server. Status: ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("Sync Error: $e");
+    }
   }
 }
