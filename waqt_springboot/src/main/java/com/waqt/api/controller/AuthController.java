@@ -158,4 +158,62 @@ public class AuthController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @RequestHeader(value = "X-User-ID", required = false) String userIdHeader,
+            @RequestBody Map<String, String> request) {
+
+        if (userIdHeader == null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+
+        Long userId = Long.parseLong(userIdHeader);
+        String oldPassword = request.get("old_password");
+        String newPassword = request.get("new_password");
+
+        if (oldPassword == null || oldPassword.trim().isEmpty() || newPassword == null || newPassword.trim().isEmpty()) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Password lama dan password baru harus diisi");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        if (newPassword.trim().length() < 4) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Password baru minimal 4 karakter");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+
+        User user = userOpt.get();
+
+        // Verify old password
+        if (!passwordEncoder.matches(oldPassword.trim(), user.getPasswordHash())) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Password lama tidak sesuai");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        userRepository.save(user);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("message", "Password berhasil diubah");
+
+        return ResponseEntity.ok(response);
+    }
 }

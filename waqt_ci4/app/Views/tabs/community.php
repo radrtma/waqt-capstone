@@ -17,6 +17,22 @@
             </a>
         </div>
 
+        <!-- Filter Kategori -->
+        <div class="community-filter-bar">
+            <a href="<?= base_url('community') ?>" class="filter-chip <?= ($filterType ?? 'all') === 'all' ? 'active' : '' ?>">
+                🔖 Semua
+            </a>
+            <a href="<?= base_url('community?type=reflection') ?>" class="filter-chip <?= ($filterType ?? '') === 'reflection' ? 'active' : '' ?>">
+                ✨ Refleksi
+            </a>
+            <a href="<?= base_url('community?type=mosque') ?>" class="filter-chip <?= ($filterType ?? '') === 'mosque' ? 'active' : '' ?>">
+                🕌 Ulasan Masjid
+            </a>
+            <a href="<?= base_url('community?type=event') ?>" class="filter-chip <?= ($filterType ?? '') === 'event' ? 'active' : '' ?>">
+                📅 Kegiatan / Event
+            </a>
+        </div>
+
         <?php if (session()->getFlashdata('error')) : ?>
             <div class="error-banner">
                 <?= esc(session()->getFlashdata('error')) ?>

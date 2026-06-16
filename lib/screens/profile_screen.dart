@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/notification_service.dart';
 import '../services/prayer_service.dart';
+import '../services/auth_service.dart';
 import 'community_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -267,6 +268,140 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showChangePasswordDialog(BuildContext context) {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFFF5E9DA),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Ganti Password',
+            style: GoogleFonts.dmSerifDisplay(
+              color: const Color(0xFF1F6F5B),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: oldPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Password Lama',
+                  labelStyle: GoogleFonts.inter(color: Colors.grey[600]),
+                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF1F6F5B)),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF1F6F5B)),
+                  ),
+                ),
+                style: GoogleFonts.inter(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Password Baru',
+                  labelStyle: GoogleFonts.inter(color: Colors.grey[600]),
+                  prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF1F6F5B)),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF1F6F5B)),
+                  ),
+                ),
+                style: GoogleFonts.inter(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Konfirmasi Password Baru',
+                  labelStyle: GoogleFonts.inter(color: Colors.grey[600]),
+                  prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF1F6F5B)),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF1F6F5B)),
+                  ),
+                ),
+                style: GoogleFonts.inter(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: Text('Batal', style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final oldPw = oldPasswordController.text.trim();
+                      final newPw = newPasswordController.text.trim();
+                      final confirmPw = confirmPasswordController.text.trim();
+
+                      if (oldPw.isEmpty || newPw.isEmpty || confirmPw.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Semua field harus diisi')),
+                        );
+                        return;
+                      }
+
+                      if (newPw != confirmPw) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Konfirmasi password tidak cocok')),
+                        );
+                        return;
+                      }
+
+                      if (newPw.length < 4) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Password baru minimal 4 karakter')),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isLoading = true);
+
+                      final result = await AuthService().changePassword(oldPw, newPw);
+
+                      setDialogState(() => isLoading = false);
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result['message']),
+                            backgroundColor: result['success'] ? const Color(0xFF1F6F5B) : Colors.red,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1F6F5B),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showLocationDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -523,6 +658,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             );
           },
+        ),
+        _buildSettingsItem(
+          Icons.lock_rounded,
+          'Ganti Password',
+          'Ubah password akun Anda',
+          onTap: () => _showChangePasswordDialog(context),
         ),
         _buildSettingsItem(
           Icons.info_rounded,

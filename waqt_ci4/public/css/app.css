@@ -426,6 +426,50 @@ h3 {
 }
 
 /* ==========================================================================
+   7b. Community Filter Bar (Category Chips)
+   ========================================================================== */
+.community-filter-bar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1.5px solid rgba(31, 111, 91, 0.12);
+  background: white;
+  color: hsl(var(--primary));
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-chip:hover {
+  background-color: hsl(var(--primary-light));
+  border-color: rgba(31, 111, 91, 0.25);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.filter-chip.active {
+  background-color: hsl(var(--primary));
+  color: white;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 4px 12px rgba(31, 111, 91, 0.25);
+}
+
+.filter-chip.active:hover {
+  background-color: hsl(var(--primary-hover));
+}
+
+/* ==========================================================================
    8. Feed Card & Post Compose Elements
    ========================================================================== */
 .post-type-selector {

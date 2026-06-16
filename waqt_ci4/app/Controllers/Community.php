@@ -54,9 +54,14 @@ class Community extends BaseController
         }
 
         $posts = [];
+        $filterType = $this->request->getGet('type') ?? 'all';
         try {
             $postModel = new PostModel();
-            $allPosts = $postModel->orderBy('created_at', 'DESC')->findAll();
+            $builder = $postModel->orderBy('created_at', 'DESC');
+            if ($filterType !== 'all' && in_array($filterType, ['reflection', 'mosque', 'event'])) {
+                $builder->where('post_type', $filterType);
+            }
+            $allPosts = $builder->findAll();
             $posts = array_map([$this, 'formatPost'], $allPosts);
         } catch (\Exception $e) {
             // Fallback
@@ -98,6 +103,7 @@ class Community extends BaseController
             'username'            => $this->session->get('username'),
             'session_token'       => $this->session->get('session_token'),
             'posts'               => $posts,
+            'filterType'          => $filterType,
             'activeMembers'       => $activeMembers,
             'trackedPrayersCount' => $trackedPrayersCount,
             'mosqueReviewsCount'  => $mosqueReviewsCount,

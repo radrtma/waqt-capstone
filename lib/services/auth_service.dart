@@ -79,6 +79,35 @@ class AuthService {
     return false;
   }
 
+  // Ganti Password di Server
+  Future<Map<String, dynamic>> changePassword(String oldPassword, String newPassword) async {
+    try {
+      final token = await getSavedToken();
+      if (token == null) return {'success': false, 'message': 'Sesi tidak valid. Silakan login ulang.'};
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/change-password'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+        body: jsonEncode({
+          'old_password': oldPassword,
+          'new_password': newPassword,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        return {'success': true, 'message': 'Password berhasil diubah.'};
+      }
+      return {'success': false, 'message': data['message'] ?? 'Gagal mengubah password.'};
+    } catch (e) {
+      debugPrint("AuthService changePassword HTTP Error: $e");
+      return {'success': false, 'message': 'Tidak dapat terhubung ke server.'};
+    }
+  }
+
   // Read saved session token from SQLite local storage
   Future<String?> getSavedToken() async {
     try {
