@@ -607,7 +607,7 @@ public class PostController {
 
             String newFilename = UUID.randomUUID().toString() + extension;
             File dest = new File(dir, newFilename);
-            file.transferTo(dest);
+            file.transferTo(dest.getAbsoluteFile());
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");

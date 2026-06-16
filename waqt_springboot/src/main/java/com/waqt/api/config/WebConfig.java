@@ -17,12 +17,16 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
+        registry.addMapping("/uploads/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET")
+                .allowedHeaders("*");
     }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Expose the uploads directory to serve uploaded images statically
-        String uploadDir = "uploads/posts/";
+        String uploadDir = "../waqt_ci4/public/uploads/posts/";
         File file = new File(uploadDir);
         if (!file.exists()) {
             file.mkdirs();
